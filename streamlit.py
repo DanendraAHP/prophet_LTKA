@@ -1,15 +1,11 @@
 import streamlit as st
-
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-
-
+import statsmodels.api as sm
 from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
 import pickle
-
-import seaborn as sns
 
 def load_data(path):
     df = pd.read_csv(path, sep=';')
@@ -35,42 +31,19 @@ def get_data(bts_data, bts_name, column):
     bts_data = bts_data[bts_data['eNodeB Name']==bts_name]
     bts_data_col = bts_data.rename(columns={f'{column}':'y'})
     bts_data_col = bts_data_col[['ds', 'y']]
-    train_length = len(bts_data_col) - (7*24) 
-    train = bts_data_col.iloc[:train_length]
-    test = bts_data_col.iloc[train_length:]
-    return train, test
-        
-def load_model(bts_name, column):
-    with open(f'models/{bts_name}_{column}.pckl', 'rb') as fin:
-        model = pickle.load(fin)
-    return model
+    bts_data_col = bts_data_col.set_index('ds')
+    bts_data_col.index = pd.DatetimeIndex(bts_data_col.index).to_period('H')
+    return bts_data_col
 
-def predict(model, day):
-    future = model.make_future_dataframe(periods=day)
-    forecast = model.predict(future)
-    return forecast
+def forecast(bts_data, start, end):
+    model=sm.tsa.statespace.SARIMAX(bts_data['y'],order=(1, 1, 1),seasonal_order=(1,1,1,12))
+    results=model.fit()
+    bts_data['forecast']=results.predict(start=start*24,end=end*24,dynamic=True)
+    return bts_data
 
-def filter_data(bts_name, data_type, days):
-    model = load_model(bts_name, data_type)
-    forecast = predict(model, days*24)
-    forecast = forecast.tail(days*24)
-    _, test_data = get_data(data, bts_name, data_type)
-    test_data = test_data.iloc[:days*24]
-    test_data = test_data.rename(columns={'y':'value'})
-    test_data['label'] = 'actual'
-    
-    forecast_df = pd.DataFrame(data={'value':forecast['yhat'].values, 'ds':test_data['ds'].values})
-    forecast_df['label'] = 'predicted' 
-    
-    return test_data.append(forecast_df)
-    
-def make_fig(test_data):
+def make_fig(bts_data):
     fig ,ax = plt.subplots() 
-    sns.lineplot(data=test_data, x='ds', y='value', hue='label', ax=ax)
-#     fig = px.line(test_data, x='ds', y=['y', 'yhat'], labels={
-#                          "y": "Actual",
-#                          "yhat": "Predicted",
-#                      })
+    bts_data[['y','forecast']].plot(figsize=(12,8), ax=ax)
     return fig
 
 path = 'data/data throughput only.csv'
@@ -93,14 +66,14 @@ with rc_1:
         bts_names
     )
 ##################################row 2##################################
-select_day = st.slider(
-    'days to predict',
-    1,
-    5,
-    7
+start_date, end_date = st.select_slider(
+    'Select a range of day to predict',
+    options=[i for i in range(1, 31)],
+    value=(25, 30)
 )
 ##################################Select Data BTS with specific data type and the model prediction##################################
-selected_data = filter_data(select_bts, select_data, select_day)
+selected_data = get_data(data, select_bts, select_data)
+selected_data = forecast(selected_data, start_date, end_date)
 ##################################row 3##################################
 with st.container():
     st.title(f'Line chart {select_data} for {select_bts}')
