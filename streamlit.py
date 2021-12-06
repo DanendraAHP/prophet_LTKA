@@ -84,12 +84,12 @@ lc_4, rc_4 = st.columns(2)
 with lc_4:
     with st.container():
         st.header('MAE')
-        mae = mean_absolute_error(selected_data[selected_data['label']=='actual']['value'], selected_data[selected_data['label']=='predicted']['value'])
+        mae = mean_absolute_error(selected_data.iloc[start_date*24:end_date*24]['y'], selected_data.iloc[start_date*24:end_date*24]['forecast'])
         st.subheader(f'{mae}')
         
         
 with rc_4:
     with st.container():
         st.header('MSE')
-        mse = mean_squared_error(selected_data[selected_data['label']=='actual']['value'], selected_data[selected_data['label']=='predicted']['value'])
+        mse = mean_squared_error(selected_data.iloc[start_date*24:end_date*24]['y'], selected_data.iloc[start_date*24:end_date*24]['forecast'])
         st.subheader(f'{mse}')
